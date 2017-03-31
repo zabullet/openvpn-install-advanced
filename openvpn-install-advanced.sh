@@ -14,18 +14,26 @@
 
 TCP_SERVICE_AND_CONFIG_NAME="openvpn_tcp"
 UDP_SERVICE_AND_CONFIG_NAME="openvpn_udp"
+TCP_SERVICE_AND_CONFIG_FILE_NAME="/etc/openvpn/${TCP_SERVICE_AND_CONFIG_NAME}.conf"
+UDP_SERVICE_AND_CONFIG_FILE_NAME="/etc/openvpn/${UDP_SERVICE_AND_CONFIG_NAME}.conf"
+COMMON_UDP_FILENAME="/etc/openvpn/clientudp-common.txt"
+COMMON_TCP_FILENAME="/etc/openvpn/clienttcp-common.txt"
+UDP_IP_BLOCK="10.8.0.0"
+UDP_IP_BLOCK_START="10.8.0.1"
+TCP_IP_BLOCK="10.9.0.0"
+TCP_IP_BLOCK_START="10.9.0.1"
+IP_BLOCK_RANGE="24"
+IP_BLOCK_NETMASK="255.255.255.0"
 
 if [[ "$USER" != 'root' ]]; then
 	echo "Sorry, you need to run this as root"
 	exit
 fi
 
-
 if [[ ! -e /dev/net/tun ]]; then
 	echo "TUN/TAP is not available"
 	exit
 fi
-
 
 if grep -qs "CentOS release 5" "/etc/redhat-release"; then
 	echo "CentOS 5 is too old and not supported"
@@ -47,70 +55,95 @@ fi
 
 ###############################################################################################################
 # END_VARIABLE_SECTION
+# START_FUNCTION_SECTION
 ###############################################################################################################
-
-
-newclient () {
-	# This function is used to create udp client .ovpn file
-	cp /etc/openvpn/client-common.txt ~/"$1.ovpn"
-	echo "<ca>" >> ~/"$1.ovpn"
-	cat /etc/openvpn/easy-rsa/pki/ca.crt >> ~/"$1.ovpn"
-	echo "</ca>" >> ~/"$1.ovpn"
-	echo "<cert>" >> ~/"$1.ovpn"
-	cat /etc/openvpn/easy-rsa/pki/issued/"$1.crt" >> ~/"$1.ovpn"
-	echo "</cert>" >> ~/"$1.ovpn"
-	echo "<key>" >> ~/"$1.ovpn"
-	cat /etc/openvpn/easy-rsa/pki/private/"$1.key" >> ~/"$1.ovpn"
-	echo "</key>" >> ~/"$1.ovpn"
-	if [ "$TLS" = "1" ]; then  #check if TLS is selected to add a TLS static key
-		echo "key-direction 1" >> ~/"$1.ovpn"
-		echo "<tls-auth>" >> ~/"$1.ovpn"
-		cat /etc/openvpn/easy-rsa/pki/private/ta.key >> ~/"$1.ovpn"
-		echo "</tls-auth>" >> ~/"$1.ovpn"
-	fi
-	if [ $TLSNEW = 1 ]; then
-		echo "--tls-version-min 1.2" >> ~/"$1.ovpn"
-	fi
-
+function createudpconfigfile () {
+	echo "" > "$UDP_SERVICE_AND_CONFIG_FILE_NAME"
 }
 
+function createtcpconfigfile () {
+	echo "" > "$TCP_SERVICE_AND_CONFIG_FILE_NAME"
+}
 
-newclienttcp () {
-	# This function is used to create tcp client .ovpn file
-	cp /etc/openvpn/clienttcp-common.txt ~/"$1tcp.ovpn"
-	echo "<ca>" >> ~/"$1tcp.ovpn"
-	cat /etc/openvpn/easy-rsa/pki/ca.crt >> ~/"$1tcp.ovpn"
-	echo "</ca>" >> ~/"$1tcp.ovpn"
-	echo "<cert>" >> ~/"$1tcp.ovpn"
-	cat /etc/openvpn/easy-rsa/pki/issued/"$1.crt" >> ~/"$1tcp.ovpn"
-	echo "</cert>" >> ~/"$1tcp.ovpn"
-	echo "<key>" >> ~/"$1tcp.ovpn"
-	cat /etc/openvpn/easy-rsa/pki/private/"$1.key" >> ~/"$1tcp.ovpn"
-	echo "</key>" >> ~/"$1tcp.ovpn"
+function addudpconfigfilevariable () {
+	printf "%s\n" "$@" >> "$UDP_SERVICE_AND_CONFIG_FILE_NAME"
+}
+
+function addtcpconfigfilevariable () {
+	printf "%s\n" "$@" >> "$TCP_SERVICE_AND_CONFIG_FILE_NAME"
+}
+
+function addconfigfilevariable () {
+	UDP_ENABLED=$1
+	TCP_ENABLED=$2
+	CONFIG_FILE_VARIABLE=$@
+	
+	if [ "$UDP_ENABLED" = "1" ]; then
+		addudpconfigfilevariable $CONFIG_FILE_VARIABLE
+	fi
+	
+	if [ "$TCP_ENABLED" = "1" ]; then
+		addtcpconfigfilevariable $CONFIG_FILE_VARIABLE
+	fi
+}
+
+function createcommonfiles () {
+	echo "" > "$COMMON_UDP_FILENAME"
+	echo "" > "$COMMON_TCP_FILENAME"
+}
+
+function addcommonfilevariable () {
+	printf "%s\n" "$@" >> "$COMMON_UDP_FILENAME"
+	printf "%s\n" "$@" >> "$COMMON_TCP_FILENAME"
+}
+
+function addudpcommonfilevariable () {
+	printf "%s\n" "$@" >> "$COMMON_UDP_FILENAME"
+}
+
+function addtcpcommonfilevariable () {
+	printf "%s\n" "$@" >> "$COMMON_TCP_FILENAME"
+}
+
+function newclient () {
+	NEW_CLIENT_NAME=$1
+	NEW_CLIENT_TYPE=$2
+	CLIENT_FILE_NAME="${NEW_CLIENT_NAME}${NEW_CLIENT_TYPE}.ovpn"
+
+	if [ "$CLIENT_TYPE" = "tcp" ]; then
+		cp "$COMMON_TCP_FILENAME" ~/"$CLIENT_FILE_NAME"
+	else
+		cp "$COMMON_UDP_FILENAME" ~/"$CLIENT_FILE_NAME"
+	fi
+	echo "<ca>" >> ~/"$CLIENT_FILE_NAME"
+	cat /etc/openvpn/easy-rsa/pki/ca.crt >> ~/"$CLIENT_FILE_NAME"
+	echo "</ca>" >> ~/"$CLIENT_FILE_NAME"
+	echo "<cert>" >> ~/"$CLIENT_FILE_NAME"
+	cat /etc/openvpn/easy-rsa/pki/issued/"$NEW_CLIENT_NAME.crt" >> ~/"$CLIENT_FILE_NAME"
+	echo "</cert>" >> ~/"$CLIENT_FILE_NAME"
+	echo "<key>" >> ~/"$CLIENT_FILE_NAME"
+
+	cat /etc/openvpn/easy-rsa/pki/private/"$NEW_CLIENT_NAME.key" >> ~/"$CLIENT_FILE_NAME"
+	echo "</key>" >> ~/"$CLIENT_FILE_NAME"
 	if [ "$TLS" = "1" ]; then  #check if TLS is selected to add a TLS static key
-		echo "key-direction 1" >> ~/"$1tcp.ovpn"
-		echo "<tls-auth>" >> ~/"$1tcp.ovpn"
-		cat /etc/openvpn/easy-rsa/pki/private/ta.key >> ~/"$1tcp.ovpn"
-		echo "</tls-auth>" >> ~/"$1tcp.ovpn"
+		echo "key-direction 1" >> ~/"$CLIENT_FILE_NAME"
+		echo "<tls-auth>" >> ~/"$CLIENT_FILE_NAME"
+		cat /etc/openvpn/easy-rsa/pki/private/ta.key >> ~/"$CLIENT_FILE_NAME"
+		echo "</tls-auth>" >> ~/"$CLIENT_FILE_NAME"
 	fi
 	if [ $TLSNEW = 1 ]; then
-		echo "--tls-version-min 1.2" >> ~/"$1.ovpn"
+		echo "--tls-version-min 1.2" >> ~/"$CLIENT_FILE_NAME"
 	fi
 }
 
 function version_gt() { test "$(echo "$@" | tr " " "\n" | sort -V | head -n 1)" != "$1"; }
-	# This function is used to compare installed openvpn and specific version
+# This function is used to compare installed openvpn and specific version
+	
+###############################################################################################################
+# END_FUNCTION_SECTION
+###############################################################################################################
 
-# Try to get our IP from the system and fallback to the Internet.
-# I do this to make the script compatible with NATed servers (lowendspirit.com)
-# and to avoid getting an IPv6.
-IP=$(ip addr | grep 'inet' | grep -v inet6 | grep -vE '127\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | grep -o -E '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | head -1)
-if [[ "$IP" = "" ]]; then
-		IP=$(wget -qO- ipv4.icanhazip.com)
-fi
-
-
-if [ -e /etc/openvpn/$UDP_SERVICE_AND_CONFIG_NAME.conf -o -e /etc/openvpn/$TCP_SERVICE_AND_CONFIG_NAME.conf ]; then    #check if udp or tcp config file is present
+if [ -e $UDP_SERVICE_AND_CONFIG_FILE_NAME -o -e $TCP_SERVICE_AND_CONFIG_FILE_NAME ]; then    #check if udp or tcp config file is present
 	while :
 	do
 	clear
@@ -131,7 +164,7 @@ if [ -e /etc/openvpn/$UDP_SERVICE_AND_CONFIG_NAME.conf -o -e /etc/openvpn/$TCP_S
 			cd /etc/openvpn/easy-rsa/
 			./easyrsa build-client-full "$CLIENT" nopass
 			# Generates the custom client.ovpn
-			if [[ -e /etc/openvpn/$UDP_SERVICE_AND_CONFIG_NAME.conf ]]; then
+			if [[ -e $UDP_SERVICE_AND_CONFIG_FILE_NAME ]]; then
 				TLS=0
 				TLSNEW=0
 				if [ -n "$(cat /etc/openvpn/$UDP_SERVICE_AND_CONFIG_NAME.conf | grep tls-auth)" ]; then #check if TLS is enabled in server config file so that static TLS key can be added to new client
@@ -140,21 +173,21 @@ if [ -e /etc/openvpn/$UDP_SERVICE_AND_CONFIG_NAME.conf -o -e /etc/openvpn/$TCP_S
 				if [ -n "$(cat /etc/openvpn/$UDP_SERVICE_AND_CONFIG_NAME.conf | grep "tls-version-min 1.2")" ]; then #check if TLS 1.2 is enabled in server config file so that static TLS key can be added to new client
 					TLSNEW=1
 				fi
-				newclient "$CLIENT"
-				echo "UDP client $CLIENT added, certs available at ~/$CLIENT.ovpn"
+				newclient "$CLIENT" "udp"
+				echo "UDP client $CLIENT added, certs available at ~/${CLIENT}udp.ovpn"
 			fi
 
 			#everything here is the same as above just for the tcp client
-			if [[ -e /etc/openvpn/$TCP_SERVICE_AND_CONFIG_NAME.conf ]]; then
+			if [[ -e $TCP_SERVICE_AND_CONFIG_FILE_NAME ]]; then
 				TLS=0
 				TLSNEW=0
-				if [ -n "$(cat /etc/openvpn/$TCP_SERVICE_AND_CONFIG_NAME.conf | grep tls-auth)" ]; then
+				if [ -n "$(cat $TCP_SERVICE_AND_CONFIG_FILE_NAME | grep tls-auth)" ]; then
 					TLS=1
 				fi
-				if [ -n "$(cat /etc/openvpn/$UDP_SERVICE_AND_CONFIG_NAME.conf | grep "tls-version-min 1.2")" ]; then
+				if [ -n "$(cat $TCP_SERVICE_AND_CONFIG_FILE_NAME | grep "tls-version-min 1.2")" ]; then
 					TLSNEW=1
 				fi
-				newclienttcp "$CLIENT"
+				newclient "$CLIENT" "tcp"
 				echo "TCP client $CLIENT added, certs available at ~/${CLIENT}tcp.ovpn"
 			fi
 
@@ -209,24 +242,24 @@ if [ -e /etc/openvpn/$UDP_SERVICE_AND_CONFIG_NAME.conf -o -e /etc/openvpn/$TCP_S
 			echo ""
 			read -p "Do you really want to remove OpenVPN? [y/n]: " -e -i n REMOVE
 			if [[ "$REMOVE" = 'y' ]]; then
-			if [[ -e /etc/openvpn/$UDP_SERVICE_AND_CONFIG_NAME.conf ]]; then  #removal of udp firewall rules
-				PORT=$(grep '^port ' /etc/openvpn/$UDP_SERVICE_AND_CONFIG_NAME.conf | cut -d " " -f 2)
+			if [[ -e $UDP_SERVICE_AND_CONFIG_FILE_NAME ]]; then  #removal of udp firewall rules
+				PORT=$(grep '^port ' $UDP_SERVICE_AND_CONFIG_FILE_NAME | cut -d " " -f 2)
 				    iptables -L | grep -q REJECT
 					sed -i "/iptables -I INPUT -p udp --dport $PORT -j ACCEPT/d" $RCLOCAL
-					sed -i "/iptables -I FORWARD -s 10.8.0.0\/24 -j ACCEPT/d" $RCLOCAL
+					sed -i "/iptables -I FORWARD -s ${UDP_IP_BLOCK}\/${IP_BLOCK_RANGE} -j ACCEPT/d" $RCLOCAL
 					sed -i "/iptables -I FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT/d" $RCLOCAL
 
-				sed -i '/iptables -t nat -A POSTROUTING -s 10.8.0.0\/24 -j SNAT --to /d' $RCLOCAL
+				sed -i '/iptables -t nat -A POSTROUTING -s ${UDP_IP_BLOCK}\/${IP_BLOCK_RANGE} -j SNAT --to /d' $RCLOCAL
 				fi
 
-				if [[ -e /etc/openvpn/$TCP_SERVICE_AND_CONFIG_NAME.conf ]]; then #removal of tcp firewall rules
-				PORT=$(grep '^port ' /etc/openvpn/$TCP_SERVICE_AND_CONFIG_NAME.conf | cut -d " " -f 2)
+				if [[ -e $TCP_SERVICE_AND_CONFIG_FILE_NAME ]]; then #removal of tcp firewall rules
+				PORT=$(grep '^port ' $TCP_SERVICE_AND_CONFIG_FILE_NAME | cut -d " " -f 2)
 
 				iptables -L | grep -q REJECT
 					sed -i "/iptables -I INPUT -p tcp --dport $PORT -j ACCEPT/d" $RCLOCAL
-					sed -i "/iptables -I FORWARD -s 10.9.0.0\/24 -j ACCEPT/d" $RCLOCAL
+					sed -i "/iptables -I FORWARD -s ${TCP_IP_BLOCK}\/${IP_BLOCK_RANGE} -j ACCEPT/d" $RCLOCAL
 					sed -i "/iptables -I FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT/d" $RCLOCAL
-					sed -i '/iptables -t nat -A POSTROUTING -s 10.9.0.0\/24 -j SNAT --to /d' $RCLOCAL
+					sed -i '/iptables -t nat -A POSTROUTING -s ${TCP_IP_BLOCK}\/${IP_BLOCK_RANGE} -j SNAT --to /d' $RCLOCAL
 				fi
 				apt-get remove --purge -y openvpn openvpn-blacklist unbound clamav clamav-daemon privoxy havp
 
@@ -251,6 +284,17 @@ if [ -e /etc/openvpn/$UDP_SERVICE_AND_CONFIG_NAME.conf -o -e /etc/openvpn/$TCP_S
 		esac
 	done
 else
+	# Try to get our IP from the system and fallback to the Internet.
+	# I do this to make the script compatible with NATed servers (lowendspirit.com)
+	# and to avoid getting an IPv6.
+	IP=$(ip addr | grep 'inet' | grep -v inet6 | grep -vE '127\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | grep -o -E '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | head -1)
+	if [[ "$IP" = "" ]]; then
+		IP=$(wget -qO- ipv4.icanhazip.com)
+	fi
+	
+	# Try to detect a NATed connection and ask about it to potential LowEndSpirit or Scaleway users
+	EXTERNALIP=$(wget -qO- ipv4.icanhazip.com)
+
 	clear
 	echo 'Welcome to this quick OpenVPN "road warrior" installer'
 	echo ""
@@ -260,48 +304,60 @@ else
 	echo ""
 	echo "First I need to know the IPv4 address of the network interface you want OpenVPN"
 	echo "listening to."
-	read -p "IP address: " -e -i $IP IP
-	echo ""
+	if [[ "$IP" != "$EXTERNALIP" ]]; then
+		echo ""
+		echo "Looks like your server is behind a NAT!"
+		echo ""
+		echo "If your server is NATed (LowEndSpirit or Scaleway), I need to know the external IP"
+		echo "If that's not the case, just ignore this and leave the next field blank"
+		read -p "External IP: " -e -i $EXTERNALIP USEREXTERNALIP
+		
+		if [[ "$USEREXTERNALIP" != "" ]]; then
+			IP=$USEREXTERNALIP
+		fi
+	else
+		read -p "IP address: " -e -i $IP IP
+	fi 
+	
 	while :
 	do
-	while :
-	do
-	clear
-	read -p "Do you want to run a UDP server [y/n]: " -e -i y UDP
-        case $UDP in
-	       y)   UDP=1
-	    break ;;
-	       n)   UDP=0
-	     break ;;
-        esac
-	 done
+		clear
+		read -p "Do you want to run a UDP server [y/n]: " -e -i y UDP
+			case $UDP in
+			   y)   UDP=1
+			break ;;
+			   n)   UDP=0
+			 break ;;
+			esac
+	done
 
-	 while :
+	while :
 	do
-	clear
-	echo "***************************************************"
-	echo "*                   !!!!!NB!!!!!                  *"
-	echo "*                                                 *"
-	echo "* Here be dragons!!! If you're using this to get  *"
-	echo "* past firewalls then go ahead and choose *y*,    *"
-	echo "* but please read and understand                  *"
-	echo "*                                                 *"
-	echo "* http://sites.inka.de/bigred/devel/tcp-tcp.html  *"
-	echo "* http://tinyurl.com/34qzu5z                      *"
-	echo "***************************************************"
-	echo ""
-	read -p "Do you want to run a TCP server [y/n]: " -e -i n TCP
-        case $TCP in
-	       y)   TCP=1
-	    break ;;
-	       n)   TCP=0
-	     break ;;
-        esac
-	 done
-	 if [ "$UDP" = 1 -o "$TCP" = 1 ]; then
-	  break
-	  fi
-	 done
+		clear
+		echo "***************************************************"
+		echo "*                   !!!!!NB!!!!!                  *"
+		echo "*                                                 *"
+		echo "* Here be dragons!!! If you're using this to get  *"
+		echo "* past firewalls then go ahead and choose *y*,    *"
+		echo "* but please read and understand                  *"
+		echo "*                                                 *"
+		echo "* http://sites.inka.de/bigred/devel/tcp-tcp.html  *"
+		echo "* http://tinyurl.com/34qzu5z                      *"
+		echo "***************************************************"
+		echo ""
+		read -p "Do you want to run a TCP server [y/n]: " -e -i n TCP
+		case $TCP in
+		   y)   TCP=1
+			break ;;
+		   n)   TCP=0
+			break ;;
+		esac
+		
+		if [ "$UDP" = 1 -o "$TCP" = 1 ]; then
+			break
+		fi
+	done
+	
 	 if [ "$UDP" = 1 ]; then
 	clear
 	read -p "What UDP port do you want to run OpenVPN on?: " -e -i 1194 PORT
@@ -470,10 +526,10 @@ else
         #Installation of "Unbound" caching DNS resolver
            sudo apt-get install unbound  -y
         if [ "$TCP" -eq 1 ]; then
-        echo "interface: 10.9.0.1" >> /etc/unbound/unbound.conf
+        echo "interface: $TCP_IP_BLOCK_START" >> /etc/unbound/unbound.conf
         fi
         if [ "$UDP" -eq 1 ]; then
-        echo "interface: 10.8.0.1" >> /etc/unbound/unbound.conf
+        echo "interface: $UDP_IP_BLOCK_START" >> /etc/unbound/unbound.conf
         fi
         echo "access-control: 0.0.0.0/0 allow" >> /etc/unbound/unbound.conf
         fi
@@ -553,138 +609,102 @@ iptables -t nat -A PREROUTING -i tun+ -p tcp --dport 80 -j REDIRECT --to-port 80
 
 	openvpn --genkey --secret /etc/openvpn/easy-rsa/pki/private/ta.key    #generate TLS key for additional security
 
-
 	# Move the stuff we need
 	cp pki/ca.crt pki/private/ca.key pki/dh.pem pki/issued/server.crt pki/private/server.key /etc/openvpn
+	
+	###############################################################################################################
+	# START_SERVER_CONFIG_SECTION
+	# Install and start service for both UDP and TCP
+	###############################################################################################################
+	
 	if [ "$UDP" = 1 ]; then
-	# Generate udp.conf
-		echo "port $PORT
-proto udp
-dev tun
-ca ca.crt
-cert server.crt
-key server.key
-dh dh.pem
-push \"register-dns\"
-topology subnet
-server 10.8.0.0 255.255.255.0
-cipher $CIPHER
-auth $DIGEST
-ifconfig-pool-persist ipp.txt" > /etc/openvpn/$UDP_SERVICE_AND_CONFIG_NAME.conf
-		echo 'push "redirect-gateway def1 bypass-dhcp"' >> /etc/openvpn/$UDP_SERVICE_AND_CONFIG_NAME.conf
-		if [ $TLS = 1 ]; then
-			echo "--tls-auth /etc/openvpn/easy-rsa/pki/private/ta.key 0" >> /etc/openvpn/$UDP_SERVICE_AND_CONFIG_NAME.conf #TLS key information added to config file
-		fi
-		if [ $TLSNEW = 1 ]; then
-			echo "--tls-version-min 1.2" >> /etc/openvpn/$UDP_SERVICE_AND_CONFIG_NAME.conf
-		fi
-	# DNS
-		case $DNS in
-			1)
-			# Obtain the resolvers from resolv.conf and use them for OpenVPN
-			grep -v '#' /etc/resolv.conf | grep 'nameserver' | grep -E -o '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | while read line; do
-				echo "push \"dhcp-option DNS $line\"" >> /etc/openvpn/$UDP_SERVICE_AND_CONFIG_NAME.conf
-			done
-			;;
-			2)
-			echo 'push "dhcp-option DNS 208.67.222.222"' >> /etc/openvpn/$UDP_SERVICE_AND_CONFIG_NAME.conf
-			echo 'push "dhcp-option DNS 208.67.220.220"' >> /etc/openvpn/$UDP_SERVICE_AND_CONFIG_NAME.conf
-			;;
-			3)
-			echo 'push "dhcp-option DNS 4.2.2.2"' >> /etc/openvpn/$UDP_SERVICE_AND_CONFIG_NAME.conf
-			echo 'push "dhcp-option DNS 4.2.2.4"' >> /etc/openvpn/$UDP_SERVICE_AND_CONFIG_NAME.conf
-			;;
-			4)
-			echo 'push "dhcp-option DNS 129.250.35.250"' >> /etc/openvpn/$UDP_SERVICE_AND_CONFIG_NAME.conf
-			echo 'push "dhcp-option DNS 129.250.35.251"' >> /etc/openvpn/$UDP_SERVICE_AND_CONFIG_NAME.conf
-			;;
-			5)
-			echo 'push "dhcp-option DNS 74.82.42.42"' >> /etc/openvpn/$UDP_SERVICE_AND_CONFIG_NAME.conf
-			;;
-			6)
-			echo 'push "dhcp-option DNS 8.8.8.8"' >> /etc/openvpn/$UDP_SERVICE_AND_CONFIG_NAME.conf
-			echo 'push "dhcp-option DNS 8.8.4.4"' >> /etc/openvpn/$UDP_SERVICE_AND_CONFIG_NAME.conf
-			;;
-			7)
-			echo 'push "dhcp-option DNS 10.8.0.1"' >> /etc/openvpn/$UDP_SERVICE_AND_CONFIG_NAME.conf
-		esac
-		echo "keepalive 10 120
-comp-lzo
-persist-key
-persist-tun
-status openvpn-status.log
-verb 3
-crl-verify /etc/openvpn/easy-rsa/pki/crl.pem" >> /etc/openvpn/$UDP_SERVICE_AND_CONFIG_NAME.conf
-		if [ "$INTERNALNETWORK" = 1 ]; then
-			echo "client-to-client" >> /etc/openvpn/$UDP_SERVICE_AND_CONFIG_NAME.conf
-		fi
+		# Generate udp.conf
+		createudpconfigfile
+		addudpconfigfilevariable "port $PORT"
+		addudpconfigfilevariable "proto udp"
+		addudpconfigfilevariable "server $UDP_IP_BLOCK $IP_BLOCK_NETMASK"
+		addudpconfigfilevariable "ifconfig-pool-persist ipp.txt"
 	fi
-
+	
 	if [ "$TCP" = 1 ]; then
-		echo "port $PORTTCP
-proto tcp
-dev tun
-ca ca.crt
-cert server.crt
-key server.key
-dh dh.pem
-push \"register-dns\"
-topology subnet
-server 10.9.0.0 255.255.255.0
-ifconfig-pool-persist ipp.txt
-cipher $CIPHER
-auth $DIGEST
-sndbuf 0
-rcvbuf 0" > /etc/openvpn/$TCP_SERVICE_AND_CONFIG_NAME.conf
-		echo 'push "redirect-gateway def1 bypass-dhcp"' >> /etc/openvpn/$TCP_SERVICE_AND_CONFIG_NAME.conf
-
-		if [ $TLS = 1 ]; then
-			echo "--tls-auth /etc/openvpn/easy-rsa/pki/private/ta.key 0" >> /etc/openvpn/$TCP_SERVICE_AND_CONFIG_NAME.conf #TLS key information added to config file
-		fi
-		if [ $TLSNEW = 1 ]; then
-			echo "--tls-version-min 1.2" >> /etc/openvpn/$TCP_SERVICE_AND_CONFIG_NAME.conf
-		fi
-	# DNS
-		case $DNS in
-			1)
-			# Obtain the resolvers from resolv.conf and use them for OpenVPN
-			grep -v '#' /etc/resolv.conf | grep 'nameserver' | grep -E -o '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | while read line; do
-				echo "push \"dhcp-option DNS $line\"" >> /etc/openvpn/$TCP_SERVICE_AND_CONFIG_NAME.conf
-			done
-			;;
-			2)
-			echo 'push "dhcp-option DNS 208.67.222.222"' >> /etc/openvpn/$TCP_SERVICE_AND_CONFIG_NAME.conf
-			echo 'push "dhcp-option DNS 208.67.220.220"' >> /etc/openvpn/$TCP_SERVICE_AND_CONFIG_NAME.conf
-			;;
-			3)
-			echo 'push "dhcp-option DNS 4.2.2.2"' >> /etc/openvpn/$TCP_SERVICE_AND_CONFIG_NAME.conf
-			echo 'push "dhcp-option DNS 4.2.2.4"' >> /etc/openvpn/$TCP_SERVICE_AND_CONFIG_NAME.conf
-			;;
-			4)
-			echo 'push "dhcp-option DNS 129.250.35.250"' >> /etc/openvpn/$TCP_SERVICE_AND_CONFIG_NAME.conf
-			echo 'push "dhcp-option DNS 129.250.35.251"' >> /etc/openvpn/$TCP_SERVICE_AND_CONFIG_NAME.conf
-			;;
-			5)
-			echo 'push "dhcp-option DNS 74.82.42.42"' >> /etc/openvpn/$TCP_SERVICE_AND_CONFIG_NAME.conf
-			;;
-			6)
-			echo 'push "dhcp-option DNS 8.8.8.8"' >> /etc/openvpn/$TCP_SERVICE_AND_CONFIG_NAME.conf
-			echo 'push "dhcp-option DNS 8.8.4.4"' >> /etc/openvpn/$TCP_SERVICE_AND_CONFIG_NAME.conf
-			;;
-			7)
-			echo 'push "dhcp-option DNS 10.9.0.1"' >> /etc/openvpn/$TCP_SERVICE_AND_CONFIG_NAME.conf
-		esac
-		echo "keepalive 10 120
-comp-lzo
-persist-key
-persist-tun
-status openvpn-status.log
-verb 3
-crl-verify /etc/openvpn/easy-rsa/pki/crl.pem" >> /etc/openvpn/$TCP_SERVICE_AND_CONFIG_NAME.conf
-		if [ "$INTERNALNETWORK" = 1 ]; then
-			echo "client-to-client" >> /etc/openvpn/$TCP_SERVICE_AND_CONFIG_NAME.conf
-		fi
+		createtcpconfigfile
+		addtcpconfigfilevariable "server $TCP_IP_BLOCK $IP_BLOCK_NETMASK"
+		addtcpconfigfilevariable "port $PORTTCP"
+		addtcpconfigfilevariable "proto tcp"
+		addtcpconfigfilevariable "sndbuf 0"
+		addtcpconfigfilevariable "rcvbuf 0"
 	fi
+
+	addconfigfilevariable $UDP $TCP "dev tun"
+	addconfigfilevariable $UDP $TCP "ca ca.crt"
+	addconfigfilevariable $UDP $TCP "cert server.crt"
+	addconfigfilevariable $UDP $TCP "key server.key"
+	addconfigfilevariable $UDP $TCP "dh dh.pem"
+	addconfigfilevariable $UDP $TCP "push \"register-dns\""
+	addconfigfilevariable $UDP $TCP "topology subnet"
+	addconfigfilevariable $UDP $TCP "ifconfig-pool-persist ipp.txt"
+	addconfigfilevariable $UDP $TCP "cipher $CIPHER"
+	addconfigfilevariable $UDP $TCP "auth $DIGEST"
+	addconfigfilevariable $UDP $TCP "push \"redirect-gateway def1 bypass-dhcp\""
+	# DNS
+	case $DNS in
+		1)
+		# Obtain the resolvers from resolv.conf and use them for OpenVPN
+		grep -v '#' /etc/resolv.conf | grep 'nameserver' | grep -E -o '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | while read line; do
+		addconfigfilevariable $UDP $TCP "push \"dhcp-option DNS $line\""
+		done
+		;;
+		2)
+		addconfigfilevariable $UDP $TCP 'push "dhcp-option DNS 208.67.222.222"' 
+		addconfigfilevariable $UDP $TCP 'push "dhcp-option DNS 208.67.220.220"'
+		;;
+		3)
+		addconfigfilevariable $UDP $TCP 'push "dhcp-option DNS 4.2.2.2"'
+		addconfigfilevariable $UDP $TCP 'push "dhcp-option DNS 4.2.2.4"'
+		;;
+		4)
+		addconfigfilevariable $UDP $TCP 'push "dhcp-option DNS 129.250.35.250"'
+		addconfigfilevariable $UDP $TCP 'push "dhcp-option DNS 129.250.35.251"'
+		;;
+		5)
+		addconfigfilevariable $UDP $TCP 'push "dhcp-option DNS 74.82.42.42"'
+		;;
+		6)
+		addconfigfilevariable $UDP $TCP 'push "dhcp-option DNS 8.8.8.8"'
+		addconfigfilevariable $UDP $TCP 'push "dhcp-option DNS 8.8.4.4"'
+		;;
+		7)
+		if [ "$UDP" = 1 ]; then
+			addudpconfigfilevariable 'push "dhcp-option DNS $UDP_IP_BLOCK_START"'
+		fi
+		if [ "$TCP" = 1 ]; then
+			addtcpconfigfilevariable 'push "dhcp-option DNS $TCP_IP_BLOCK_START"'
+		fi
+	esac
+	
+	if [ $TLS = 1 ]; then
+		addconfigfilevariable $UDP $TCP "--tls-auth /etc/openvpn/easy-rsa/pki/private/ta.key 0"
+	fi
+	if [ $TLSNEW = 1 ]; then
+		addconfigfilevariable $UDP $TCP "--tls-version-min 1.2"
+	fi
+	
+	addconfigfilevariable $UDP $TCP "keepalive 10 120"
+	addconfigfilevariable $UDP $TCP "comp-lzo"
+	addconfigfilevariable $UDP $TCP "persist-key"
+	addconfigfilevariable $UDP $TCP "persist-tun"
+	addconfigfilevariable $UDP $TCP "status openvpn-status.log"
+	addconfigfilevariable $UDP $TCP "verb 3"
+	addconfigfilevariable $UDP $TCP "crl-verify /etc/openvpn/easy-rsa/pki/crl.pem"
+
+	if [ "$INTERNALNETWORK" = 1 ]; then
+		addconfigfilevariable $UDP $TCP "client-to-client"
+	fi
+	
+	###############################################################################################################
+	# END_SERVER_CONFIG_SECTION
+	# Install and start service for both UDP and TCP
+	###############################################################################################################
 
 	# Enable net.ipv4.ip_forward for the system
 	sed -i 's|#net.ipv4.ip_forward=1|net.ipv4.ip_forward=1|' /etc/sysctl.conf
@@ -693,44 +713,46 @@ crl-verify /etc/openvpn/easy-rsa/pki/crl.pem" >> /etc/openvpn/$TCP_SERVICE_AND_C
 	# Avoid an unneeded reboot
 	echo 1 > /proc/sys/net/ipv4/ip_forward
 	# Set NAT for the VPN subnet
-	   if [ "$INTERNALNETWORK" = 1 ]; then
-	    if [ "$UDP" = 1 ]; then
-	iptables -t nat -A POSTROUTING -s 10.8.0.0/24 ! -d 10.8.0.0/24 -j SNAT --to $IP
-		sed -i "1 a\iptables -t nat -A POSTROUTING -s 10.8.0.0/24 ! -d 10.8.0.0/24 -j SNAT --to $IP" $RCLOCAL
-	    fi
-		if [ "$TCP" = 1 ]; then
-			iptables -t nat -A POSTROUTING -s 10.9.0.0/24 ! -d 10.9.0.0/24 -j SNAT --to $IP
-			sed -i "1 a\iptables -t nat -A POSTROUTING -s 10.9.0.0/24 ! -d 10.9.0.0/24 -j SNAT --to $IP" $RCLOCAL
-	    fi
-	   else
-	   if [ "$UDP" = 1 ]; then
-	iptables -t nat -A POSTROUTING -s 10.8.0.0/24 ! -d 10.8.0.1 -j SNAT --to $IP
-	sed -i "1 a\iptables -t nat -A POSTROUTING -s 10.8.0.0/24 -j SNAT --to $IP" $RCLOCAL
-	    fi
-		if [ "$TCP" = 1 ]; then
-			iptables -t nat -A POSTROUTING -s 10.9.0.0/24  ! -d 10.9.0.1 -j SNAT --to $IP #This line and the next one are added for tcp server instance
-			sed -i "1 a\iptables -t nat -A POSTROUTING -s 10.9.0.0/24 -j SNAT --to $IP" $RCLOCAL
+	if [ "$INTERNALNETWORK" = 1 ]; then
+		if [ "$UDP" = 1 ]; then
+			iptables -t nat -A POSTROUTING -s ${UDP_IP_BLOCK}/${IP_BLOCK_RANGE} ! -d ${UDP_IP_BLOCK}/${IP_BLOCK_RANGE} -j SNAT --to $IP
+			sed -i "1 a\iptables -t nat -A POSTROUTING -s ${UDP_IP_BLOCK}/${IP_BLOCK_RANGE} ! -d ${UDP_IP_BLOCK}/${IP_BLOCK_RANGE} -j SNAT --to $IP" $RCLOCAL
 		fi
-	   fi
+		
+		if [ "$TCP" = 1 ]; then
+			iptables -t nat -A POSTROUTING -s ${TCP_IP_BLOCK}/${IP_BLOCK_RANGE} ! -d ${TCP_IP_BLOCK}/${IP_BLOCK_RANGE} -j SNAT --to $IP
+			sed -i "1 a\iptables -t nat -A POSTROUTING -s ${TCP_IP_BLOCK}/${IP_BLOCK_RANGE} ! -d ${TCP_IP_BLOCK}/${IP_BLOCK_RANGE} -j SNAT --to $IP" $RCLOCAL
+		fi
+		else
+		if [ "$UDP" = 1 ]; then
+			iptables -t nat -A POSTROUTING -s ${UDP_IP_BLOCK}/${IP_BLOCK_RANGE} ! -d ${UDP_IP_BLOCK_START} -j SNAT --to $IP
+			sed -i "1 a\iptables -t nat -A POSTROUTING -s ${UDP_IP_BLOCK}/${IP_BLOCK_RANGE} -j SNAT --to $IP" $RCLOCAL
+		fi
+		
+		if [ "$TCP" = 1 ]; then
+			iptables -t nat -A POSTROUTING -s ${TCP_IP_BLOCK}/${IP_BLOCK_RANGE}  ! -d ${TCP_IP_BLOCK_START} -j SNAT --to $IP #This line and the next one are added for tcp server instance
+			sed -i "1 a\iptables -t nat -A POSTROUTING -s ${TCP_IP_BLOCK}/${IP_BLOCK_RANGE} -j SNAT --to $IP" $RCLOCAL
+		fi
+	fi
 
 	if iptables -L | grep -q REJECT; then
 		# If iptables has at least one REJECT rule, we asume this is needed.
 		# Not the best approach but I can't think of other and this shouldn't
 		# cause problems.
 		if [ "$UDP" = 1 ]; then
-		iptables -I INPUT -p udp --dport $PORT -j ACCEPT
-		iptables -I FORWARD -s 10.8.0.0/24 -j ACCEPT
-		iptables -I FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
-		sed -i "1 a\iptables -I INPUT -p udp --dport $PORT -j ACCEPT" $RCLOCAL
-		sed -i "1 a\iptables -I FORWARD -s 10.8.0.0/24 -j ACCEPT" $RCLOCAL
-		sed -i "1 a\iptables -I FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT" $RCLOCAL
+			iptables -I INPUT -p udp --dport $PORT -j ACCEPT
+			iptables -I FORWARD -s ${UDP_IP_BLOCK}/${IP_BLOCK_RANGE} -j ACCEPT
+			iptables -I FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
+			sed -i "1 a\iptables -I INPUT -p udp --dport $PORT -j ACCEPT" $RCLOCAL
+			sed -i "1 a\iptables -I FORWARD -s ${UDP_IP_BLOCK}/${IP_BLOCK_RANGE} -j ACCEPT" $RCLOCAL
+			sed -i "1 a\iptables -I FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT" $RCLOCAL
 		fi
 		if [ "$TCP" = 1 ]; then
 			iptables -I INPUT -p udp --dport $PORTTCP -j ACCEPT #This line and next 5 lines have been added for tcp support
-			iptables -I FORWARD -s 10.9.0.0/24 -j ACCEPT
+			iptables -I FORWARD -s ${TCP_IP_BLOCK}/${IP_BLOCK_RANGE} -j ACCEPT
 			iptables -I FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
 			sed -i "1 a\iptables -I INPUT -p tcp --dport $PORTTCP -j ACCEPT" $RCLOCAL
-			sed -i "1 a\iptables -I FORWARD -s 10.9.0.0/24 -j ACCEPT" $RCLOCAL
+			sed -i "1 a\iptables -I FORWARD -s ${TCP_IP_BLOCK}/${IP_BLOCK_RANGE} -j ACCEPT" $RCLOCAL
 			sed -i "1 a\iptables -I FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT" $RCLOCAL
 		fi
 	fi
@@ -787,71 +809,46 @@ WantedBy=multi-user.target" > /etc/systemd/system/$TCP_SERVICE_AND_CONFIG_NAME.s
 	###############################################################################################################
 	# END_SERVICE_SECTION
 	###############################################################################################################
-
-	# Try to detect a NATed connection and ask about it to potential LowEndSpirit or Scaleway users
-	EXTERNALIP=$(wget -qO- ipv4.icanhazip.com)
-	if [[ "$IP" != "$EXTERNALIP" ]]; then
-		echo ""
-		echo "Looks like your server is behind a NAT!"
-		echo ""
-		echo "If your server is NATed (LowEndSpirit or Scaleway), I need to know the external IP"
-		echo "If that's not the case, just ignore this and leave the next field blank"
-		read -p "External IP: " -e USEREXTERNALIP
-		if [[ "$USEREXTERNALIP" != "" ]]; then
-			IP=$USEREXTERNALIP
-		fi
-	fi
 	# client-common.txt is created so we have a template to add further UDP users later
+	createcommonfiles
+	addcommonfilevariable "client"
+	addcommonfilevariable "cipher $CIPHER"
+	addcommonfilevariable "auth $DIGEST"
+	addcommonfilevariable "dev tun"
+	addcommonfilevariable "remote $IP $PORTTCP"
+	addcommonfilevariable "resolv-retry infinite"
+	addcommonfilevariable "nobind"
+	addcommonfilevariable "persist-key"
+	addcommonfilevariable "persist-tun"
+	addcommonfilevariable "remote-cert-tls server"
+	addcommonfilevariable "comp-lzo"
+	addcommonfilevariable "verb 3"
+	
 	if [ "$UDP" = 1 ]; then
-	echo "client
-dev tun
-cipher $CIPHER
-auth $DIGEST
-proto udp
-remote $IP $PORT
-resolv-retry infinite
-nobind
-persist-key
-persist-tun
-remote-cert-tls server
-comp-lzo
-verb 3" > /etc/openvpn/client-common.txt
-newclient "$CLIENT"
-  fi
-    if [ "$TCP" = 1 ]; then
-	echo "client
-	cipher $CIPHER
-auth $DIGEST
-dev tun
-proto tcp
-remote $IP $PORTTCP
-resolv-retry infinite
-nobind
-persist-key
-persist-tun
-remote-cert-tls server
-comp-lzo
-verb 3
-sndbuf 0
-rcvbuf 0
-" > /etc/openvpn/clienttcp-common.txt  # clienttcp-common.txt is created so we have a template to add further TCP users later
-newclienttcp "$CLIENT"
+		addudpcommonfilevariable "proto udp"
+		newclient "$CLIENT" "udp"
 	fi
-	# Generates the custom client.ovpn
-
-
+    
+	if [ "$TCP" = 1 ]; then
+		addtcpcommonfilevariable "proto tcp"
+		addtcpcommonfilevariable "sndbuf 0"
+		addtcpcommonfilevariable "rcvbuf 0"
+		newclient "$CLIENT" "tcp"
+	fi
 
 	echo ""
 	echo "Finished!"
 	echo ""
 	if [ "$UDP" = 1 ]; then
-	echo "Your UDP client config is available at ~/$CLIENT.ovpn"
+		echo "Your UDP client config is available at ~/${CLIENT}udp.ovpn"
 	fi
 	if [ "$TCP" = 1 ]; then
-	echo "Your TCP client config is available at ~/${CLIENT}tcp.ovpn"
+		echo "Your TCP client config is available at ~/${CLIENT}tcp.ovpn"
 	fi
+	
 	echo "If you want to add more clients, you simply need to run this script another time!"
 fi
+
 if [ "$DNSRESOLVER" = 1 ]; then
-sudo service unbound restart
+	sudo service unbound restart
 fi
