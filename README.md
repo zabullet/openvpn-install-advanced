@@ -1,4 +1,6 @@
 # openvpn-install-advanced
+
+[![Join the chat at https://gitter.im/pl48415/openvpn-install-advanced](https://badges.gitter.im/pl48415/openvpn-install-advanced.svg)](https://gitter.im/pl48415/openvpn-install-advanced?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 This script is based upon [Nyr's](https://github.com/Nyr/) OpenVPN [roadwarrior](http://en.wikipedia.org/wiki/Road_warrior_%28computing%29) installer.
 
 I have added additional options for improved security and compatibility with restricted networks.
@@ -30,7 +32,7 @@ Privoxy is used for increased privacy and ad blocking. After privoxy all traffic
 HAVP and is scanned with ClamAV. It is recommended to use system with at least 1GB of ram for these features.
 
 # Installation
-`wget git.io/vcIGP --no-check-certificate -O openvpn-install-advanced.sh && bash openvpn-install-advanced.sh`
+`wget https://git.io/vcIGP -O openvpn-install-advanced.sh && bash openvpn-install-advanced.sh`
 
 This script has been tested on 
 

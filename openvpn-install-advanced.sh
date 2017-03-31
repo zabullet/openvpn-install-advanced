@@ -504,7 +504,7 @@ else
 	echo "What DNS do you want to use with the VPN?"
 	echo "   1) Current system resolvers"
 	echo "   2) OpenDNS"
-	echo "   3) Level 3"
+	echo "   3) Verisign"
 	echo "   4) NTT"
 	echo "   5) Hurricane Electric"
 	echo "   6) Google"
@@ -626,6 +626,7 @@ iptables -t nat -A PREROUTING -i tun+ -p tcp --dport 80 -j REDIRECT --to-port 80
 		addudpconfigfilevariable "proto udp"
 		addudpconfigfilevariable "server $UDP_IP_BLOCK $IP_BLOCK_NETMASK"
 		addudpconfigfilevariable "ifconfig-pool-persist ipp.txt"
+
 	fi
 	
 	if [ "$TCP" = 1 ]; then
@@ -661,8 +662,8 @@ iptables -t nat -A PREROUTING -i tun+ -p tcp --dport 80 -j REDIRECT --to-port 80
 		addconfigfilevariable $UDP $TCP 'push "dhcp-option DNS 208.67.220.220"'
 		;;
 		3)
-		addconfigfilevariable $UDP $TCP 'push "dhcp-option DNS 4.2.2.2"'
-		addconfigfilevariable $UDP $TCP 'push "dhcp-option DNS 4.2.2.4"'
+		addconfigfilevariable $UDP $TCP 'push "dhcp-option DNS 64.6.64.6"'
+		addconfigfilevariable $UDP $TCP 'push "dhcp-option DNS 64.6.65.6"'
 		;;
 		4)
 		addconfigfilevariable $UDP $TCP 'push "dhcp-option DNS 129.250.35.250"'
