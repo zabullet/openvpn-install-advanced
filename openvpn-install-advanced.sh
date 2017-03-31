@@ -261,6 +261,8 @@ if [ -e $UDP_SERVICE_AND_CONFIG_FILE_NAME -o -e $TCP_SERVICE_AND_CONFIG_FILE_NAM
 					sed -i "/iptables -I FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT/d" $RCLOCAL
 					sed -i '/iptables -t nat -A POSTROUTING -s ${TCP_IP_BLOCK}\/${IP_BLOCK_RANGE} -j SNAT --to /d' $RCLOCAL
 				fi
+				sed -i '/iptables -t nat -A PREROUTING -p tcp -i tun+ --dport 80 -j REDIRECT --to-port 8080/d' $RCLOCAL #Remove HAVP proxy
+				iptables -t nat -D PREROUTING -i tun+ -p tcp --dport 80 -j REDIRECT --to-port 8080
 				apt-get remove --purge -y openvpn openvpn-blacklist unbound clamav clamav-daemon privoxy havp
 
 				rm -rf /etc/openvpn
@@ -557,7 +559,7 @@ sed -i "/hostname hostname.example.org/c\hostname "$HOST""  /etc/privoxy/config
 sed -i '/PARENTPROXY localhost/c\PARENTPROXY 127.0.0.1'  /etc/havp/havp.config
 sed -i '/PARENTPORT 3128/c\PARENTPORT 8118'  /etc/havp/havp.config
 sed -i '/TRANSPARENT false/c\TRANSPARENT true'  /etc/havp/havp.config
-sed -i "3 a\iptables -t nat -A PREROUTING -p tcp -i tun+ --dport 80 -j REDIRECT --to-port 8080" /etc/rc.local  #Add this firewall rule to startup(redirect traffic on port 80 to privoxy)
+sed -i "3 a\iptables -t nat -A PREROUTING -p tcp -i tun+ --dport 80 -j REDIRECT --to-port 8080" $RCLOCAL  #Add this firewall rule to startup(redirect traffic on port 80 to privoxy)
  service havp restart
 iptables -t nat -A PREROUTING -i tun+ -p tcp --dport 80 -j REDIRECT --to-port 8080
  fi
